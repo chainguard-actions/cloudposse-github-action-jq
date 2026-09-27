@@ -1,0 +1,41 @@
+name: Test basic jq eval on JSON string
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure Node.js is available as node24
+        run: |
+          node --version || true
+          # act may look for 'node24' binary; create a symlink if needed
+          if ! command -v node24 >/dev/null 2>&1; then
+            NODE_BIN=$(command -v node || true)
+            if [ -n "$NODE_BIN" ]; then
+              sudo ln -sf "$NODE_BIN" /usr/local/bin/node24 || true
+            fi
+          fi
+          node --version
+      - name: Ensure jq is installed
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
+          jq --version
+      - id: action
+        uses: .
+        with:
+          input: '{"name":"world","count":42}'
+          script: '.name'
+          raw-output: 'true'
+      - name: Assert output equals expected
+        env:
+          ACTUAL: ${{ steps.action.outputs.output }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != "world" ]; then
+            echo "FAIL: expected 'world' but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"

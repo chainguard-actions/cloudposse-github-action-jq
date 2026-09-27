@@ -1,0 +1,72 @@
+name: Test jq eval with complex queries
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure Node.js is available as node24
+        run: |
+          node --version || true
+          if ! command -v node24 >/dev/null 2>&1; then
+            NODE_BIN=$(command -v node || true)
+            if [ -n "$NODE_BIN" ]; then
+              sudo ln -sf "$NODE_BIN" /usr/local/bin/node24 || true
+            fi
+          fi
+          node --version
+      - name: Ensure jq is installed
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
+          jq --version
+      - id: array-length
+        uses: .
+        with:
+          input: '{"items":["a","b","c","d"]}'
+          script: '.items | length'
+          raw-output: 'true'
+      - name: Assert array length query
+        env:
+          ACTUAL: ${{ steps.array-length.outputs.output }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != "4" ]; then
+            echo "FAIL: expected '4' but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - id: filter-map
+        uses: .
+        with:
+          input: '{"users":[{"name":"alice","active":true},{"name":"bob","active":false},{"name":"carol","active":true}]}'
+          script: '[.users[] | select(.active) | .name]'
+          compact: 'true'
+      - name: Assert filter and map query
+        env:
+          ACTUAL: ${{ steps.filter-map.outputs.output }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != '["alice","carol"]' ]; then
+            echo "FAIL: expected '[\"alice\",\"carol\"]' but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+      - id: nested-access
+        uses: .
+        with:
+          input: '{"a":{"b":{"c":"deep-value"}}}'
+          script: '.a.b.c'
+          raw-output: 'true'
+      - name: Assert nested key access
+        env:
+          ACTUAL: ${{ steps.nested-access.outputs.output }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != "deep-value" ]; then
+            echo "FAIL: expected 'deep-value' but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"

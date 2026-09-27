@@ -1,0 +1,40 @@
+name: Test jq eval with compact output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure Node.js is available as node24
+        run: |
+          node --version || true
+          if ! command -v node24 >/dev/null 2>&1; then
+            NODE_BIN=$(command -v node || true)
+            if [ -n "$NODE_BIN" ]; then
+              sudo ln -sf "$NODE_BIN" /usr/local/bin/node24 || true
+            fi
+          fi
+          node --version
+      - name: Ensure jq is installed
+        run: |
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
+          jq --version
+      - id: action
+        uses: .
+        with:
+          input: '{"a":1,"b":{"c":2,"d":3}}'
+          script: '.b'
+          compact: 'true'
+      - name: Assert output is compact JSON (no newlines)
+        env:
+          ACTUAL: ${{ steps.action.outputs.output }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ "$ACTUAL" != '{"c":2,"d":3}' ]; then
+            echo "FAIL: expected '{\"c\":2,\"d\":3}' but got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
